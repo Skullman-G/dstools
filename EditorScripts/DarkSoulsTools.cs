@@ -4,8 +4,8 @@ using System.Linq;
 using System.IO;
 using UnityEngine;
 using UnityEditor;
-using UnityEngine.Experimental.Rendering.HDPipeline;
 using SoulsFormats;
+using UnityEngine.Rendering.HighDefinition;
 
 public class DarkSoulsTools : EditorWindow
 {
