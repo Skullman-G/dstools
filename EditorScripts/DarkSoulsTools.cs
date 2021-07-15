@@ -317,6 +317,11 @@ public class DarkSoulsTools : EditorWindow
     {
         string gameFolder = GameFolder(type);
 
+        if (!AssetDatabase.IsValidFolder($@"Assets/{gameFolder}/Chr"))
+        {
+            AssetDatabase.CreateFolder($@"Assets/{gameFolder}", "Chr");
+        }
+
         if (!AssetDatabase.IsValidFolder($@"Assets/{gameFolder}/Chr/{chrid}"))
         {
             AssetDatabase.CreateFolder($@"Assets/{gameFolder}/Chr", chrid);
@@ -611,7 +616,7 @@ public class DarkSoulsTools : EditorWindow
         }
     }
 
-    static void ImportPart(string partpath, string partname, GameType type)
+    private static void ImportPart(string partpath, string partname, GameType type)
     {
         string gameFolder = GameFolder(type);
 
@@ -2077,9 +2082,10 @@ public class DarkSoulsTools : EditorWindow
             // Make adjusted mapname so darkroot garden meme works
             var mapnameAdj = mapname.Substring(0, 6) + "_00_00";
 
-            if (!AssetDatabase.IsValidFolder("Assets/DS1/" + mapnameAdj))
+            string folderName = remastered ? "Assets/DSR/" : "Assets/DS1/";
+            if (!AssetDatabase.IsValidFolder(folderName + mapnameAdj))
             {
-                AssetDatabase.CreateFolder("Assets/DS1", mapnameAdj);
+                AssetDatabase.CreateFolder(folderName, mapnameAdj);
             }
 
             // Create an MSB asset link to the DS3 asset
@@ -2096,10 +2102,10 @@ public class DarkSoulsTools : EditorWindow
                 foreach (var mappiece in msb.Models.MapPieces)
                 {
                     var assetname = mappiece.Name;
-                    if (AssetDatabase.FindAssets($@"Assets/DS1/{mapnameAdj}/{assetname}.prefab").Length == 0 && LoadMapFlvers)
+                    if (AssetDatabase.FindAssets($@"{folderName}{mapnameAdj}/{assetname}.prefab").Length == 0 && LoadMapFlvers)
                     {
                         if (File.Exists(Interroot + $@"\map\{mapnameAdj}\{assetname}A{area:D2}.flver"))
-                            FlverUtilities.ImportFlver(type, Interroot + $@"\map\{mapnameAdj}\{assetname}A{area:D2}.flver", $@"Assets/DS1/{mapnameAdj}/{assetname}", $@"Assets/DS1/UDSFMMapTextures");
+                            FlverUtilities.ImportFlver(type, Interroot + $@"\map\{mapnameAdj}\{assetname}A{area:D2}.flver", $@"{folderName}{mapnameAdj}/{assetname}", $@"{folderName}UDSFMMapTextures");
                     }
                 }
             }
@@ -2138,7 +2144,7 @@ public class DarkSoulsTools : EditorWindow
                     var path = $@"{Interroot}\map\{mapnameAdj}\{prefix}{mod.Name.Substring(1)}A{area:D2}.hkx";
                     if (File.Exists(path))
                     {
-                        CollisionUtilities.ImportDS1CollisionHKX(HKX.Read(path, HKX.HKXVariation.HKXDS1), $@"Assets/DS1/{mapnameAdj}/{prefix}{mod.Name.Substring(1)}");
+                        CollisionUtilities.ImportDS1CollisionHKX(HKX.Read(path, HKX.HKXVariation.HKXDS1), $@"{folderName}{mapnameAdj}/{prefix}{mod.Name.Substring(1)}");
                     }
                 }
             }
@@ -2153,16 +2159,54 @@ public class DarkSoulsTools : EditorWindow
             MapPieces.transform.parent = PartsSection.transform;
             foreach (var part in msb.Parts.MapPieces)
             {
-                GameObject src = LoadMapFlvers ? AssetDatabase.LoadAssetAtPath<GameObject>($@"Assets/DS1/{mapnameAdj}/{part.ModelName}.prefab") : null;
+                GameObject src = LoadMapFlvers ? AssetDatabase.LoadAssetAtPath<GameObject>($@"{folderName}{mapnameAdj}/{part.ModelName}.prefab") : null;
                 GameObject obj = null;
                 if (src != null)
                 {
-                    obj = (GameObject)PrefabUtility.InstantiatePrefab((GameObject)src);
+                    obj = (GameObject)PrefabUtility.InstantiatePrefab(src);
                     obj.name = part.Name;
                 }
                 else
                 {
-                    obj = new GameObject(part.Name);
+                    if (!AssetDatabase.IsValidFolder($@"Assets/{GameFolder(type)}/Parts"))
+                    {
+                        AssetDatabase.CreateFolder($@"Assets/{GameFolder(type)}", "Parts");
+                    }
+                    if (!AssetDatabase.IsValidFolder($@"Assets/{GameFolder(type)}/Parts/textures"))
+                    {
+                        AssetDatabase.CreateFolder($@"Assets/{GameFolder(type)}/Parts", "textures");
+                    }
+
+                    string partspath = Interroot + "/parts";
+                    AssetDatabase.StartAssetEditing();
+                    try
+                    {
+                        ImportPartTextures(partspath, part.ModelName, type);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.Error.WriteLine($"Error loading part {part.ModelName}: {e.Message}");
+                    }
+                    try
+                    {
+                        ImportPart(partspath, part.ModelName, type);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.Error.WriteLine($"Error loading part {part.ModelName}: {e.Message}");
+                    }
+                    AssetDatabase.StopAssetEditing();
+
+                    src = LoadMapFlvers ? AssetDatabase.LoadAssetAtPath<GameObject>($@"{folderName}{mapnameAdj}/{part.ModelName}.prefab") : null;
+                    if (src != null)
+                    {
+                        obj = (GameObject)PrefabUtility.InstantiatePrefab(src);
+                        obj.name = part.Name;
+                    }
+                    else
+                    {
+                        obj = new GameObject(part.Name);
+                    }
                 }
                 InitializeDS1Part<MSB1MapPiecePart>(obj, part, 9, MapPieces);
             }
@@ -2171,7 +2215,7 @@ public class DarkSoulsTools : EditorWindow
             Objects.transform.parent = PartsSection.transform;
             foreach (var part in msb.Parts.Objects)
             {
-                GameObject src = AssetDatabase.LoadAssetAtPath<GameObject>($@"Assets/DS1/Obj/{part.ModelName}.prefab");
+                GameObject src = AssetDatabase.LoadAssetAtPath<GameObject>($@"{folderName}Obj/{part.ModelName}.prefab");
                 GameObject obj = null;
                 if (src != null)
                 {
@@ -2180,7 +2224,42 @@ public class DarkSoulsTools : EditorWindow
                 }
                 else
                 {
-                    obj = new GameObject(part.Name);
+                    string gameFolder = GameFolder(type);
+                    if (!AssetDatabase.IsValidFolder($@"Assets/{gameFolder}/Obj"))
+                    {
+                        AssetDatabase.CreateFolder($@"Assets/{gameFolder}", "Obj");
+                    }
+
+                    string objpath = Interroot + "/obj";
+                    AssetDatabase.StartAssetEditing();
+                    try
+                    {
+                        ImportObjTextures(objpath, part.ModelName, type);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.Error.WriteLine($"Error loading obj {part.ModelName} textures: {e.Message}");
+                    }
+                    try
+                    {
+                        ImportObj(objpath, part.ModelName, type);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.Error.WriteLine($"Error loading obj {part.ModelName}: {e.Message}");
+                    }
+                    AssetDatabase.StopAssetEditing();
+
+                    src = AssetDatabase.LoadAssetAtPath<GameObject>($@"{folderName}Obj/{part.ModelName}.prefab");
+                    if (src != null)
+                    {
+                        obj = (GameObject)PrefabUtility.InstantiatePrefab((GameObject)src);
+                        obj.name = part.Name;
+                    }
+                    else
+                    {
+                        obj = new GameObject(part.Name);
+                    }
                 }
                 InitializeDS1Part<MSB1ObjectPart>(obj, part, 10, Objects);
             }
@@ -2189,7 +2268,7 @@ public class DarkSoulsTools : EditorWindow
             DummyObjects.transform.parent = PartsSection.transform;
             foreach (var part in msb.Parts.DummyObjects)
             {
-                GameObject src = AssetDatabase.LoadAssetAtPath<GameObject>($@"Assets/DS1/Obj/{part.ModelName}.prefab");
+                GameObject src = AssetDatabase.LoadAssetAtPath<GameObject>($@"{folderName}Obj/{part.ModelName}.prefab");
                 GameObject obj = null;
                 if (src != null)
                 {
@@ -2198,7 +2277,42 @@ public class DarkSoulsTools : EditorWindow
                 }
                 else
                 {
-                    obj = new GameObject(part.Name);
+                    string gameFolder = GameFolder(type);
+                    if (!AssetDatabase.IsValidFolder($@"Assets/{gameFolder}/Obj"))
+                    {
+                        AssetDatabase.CreateFolder($@"Assets/{gameFolder}", "Obj");
+                    }
+
+                    string objpath = Interroot + "/obj";
+                    AssetDatabase.StartAssetEditing();
+                    try
+                    {
+                        ImportObjTextures(objpath, part.ModelName, type);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.Error.WriteLine($"Error loading obj {part.ModelName} textures: {e.Message}");
+                    }
+                    try
+                    {
+                        ImportObj(objpath, part.ModelName, type);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.Error.WriteLine($"Error loading obj {part.ModelName}: {e.Message}");
+                    }
+                    AssetDatabase.StopAssetEditing();
+
+                    src = AssetDatabase.LoadAssetAtPath<GameObject>($@"{folderName}Obj/{part.ModelName}.prefab");
+                    if (src != null)
+                    {
+                        obj = (GameObject)PrefabUtility.InstantiatePrefab((GameObject)src);
+                        obj.name = part.Name;
+                    }
+                    else
+                    {
+                        obj = new GameObject(part.Name);
+                    }
                 }
                 InitializeDS1Part<MSB1DummyObjectPart>(obj, part, 10, DummyObjects);
             }
@@ -2207,16 +2321,53 @@ public class DarkSoulsTools : EditorWindow
             Enemies.transform.parent = PartsSection.transform;
             foreach (var part in msb.Parts.Enemies)
             {
-                GameObject src = AssetDatabase.LoadAssetAtPath<GameObject>($@"Assets/DS1/Chr/{part.ModelName}.prefab");
+                GameObject src = AssetDatabase.LoadAssetAtPath<GameObject>($@"{folderName}Chr/{part.ModelName}.prefab");
                 GameObject obj = null;
                 if (src != null)
                 {
-                    obj = (GameObject)PrefabUtility.InstantiatePrefab((GameObject)src);
+                    obj = (GameObject)PrefabUtility.InstantiatePrefab(src);
                     obj.name = part.Name;
                 }
                 else
                 {
-                    obj = new GameObject(part.Name);
+                    string chrpath = Interroot + "/chr";
+                    AssetDatabase.StartAssetEditing();
+                    try
+                    {
+                        ImportChrTexbnd(chrpath, part.ModelName, type);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"Error loading chr {part.ModelName} textures: {e.Message}, {e.StackTrace}");
+                    }
+                    try
+                    {
+                        ImportChrTextures(chrpath, part.ModelName, type);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"Error loading chr {part.ModelName} textures: {e.Message}, {e.StackTrace}");
+                    }
+                    try
+                    {
+                        ImportChr(chrpath, part.ModelName, type);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"Error loading chr {part.ModelName}: {e.Message}, {e.StackTrace}");
+                    }
+                    AssetDatabase.StopAssetEditing();
+
+                    src = AssetDatabase.LoadAssetAtPath<GameObject>($@"{folderName}Chr/{part.ModelName}.prefab");
+                    if (src != null)
+                    {
+                        obj = (GameObject)PrefabUtility.InstantiatePrefab(src);
+                        obj.name = part.Name;
+                    }
+                    else
+                    {
+                        obj = new GameObject(part.Name);
+                    }
                 }
                 InitializeDS1Part<MSB1EnemyPart>(obj, part, 11, Enemies);
             }
@@ -2225,7 +2376,7 @@ public class DarkSoulsTools : EditorWindow
             DummyEnemies.transform.parent = PartsSection.transform;
             foreach (var part in msb.Parts.DummyEnemies)
             {
-                GameObject src = AssetDatabase.LoadAssetAtPath<GameObject>($@"Assets/DS1/Obj/{part.ModelName}.prefab");
+                GameObject src = AssetDatabase.LoadAssetAtPath<GameObject>($@"{folderName}Obj/{part.ModelName}.prefab");
                 GameObject obj = null;
                 if (src != null)
                 {
@@ -2234,7 +2385,42 @@ public class DarkSoulsTools : EditorWindow
                 }
                 else
                 {
-                    obj = new GameObject(part.Name);
+                    string gameFolder = GameFolder(type);
+                    if (!AssetDatabase.IsValidFolder($@"Assets/{gameFolder}/Obj"))
+                    {
+                        AssetDatabase.CreateFolder($@"Assets/{gameFolder}", "Obj");
+                    }
+
+                    string objpath = Interroot + "/obj";
+                    AssetDatabase.StartAssetEditing();
+                    try
+                    {
+                        ImportObjTextures(objpath, part.ModelName, type);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.Error.WriteLine($"Error loading obj {part.ModelName} textures: {e.Message}");
+                    }
+                    try
+                    {
+                        ImportObj(objpath, part.ModelName, type);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.Error.WriteLine($"Error loading obj {part.ModelName}: {e.Message}");
+                    }
+                    AssetDatabase.StopAssetEditing();
+
+                    src = AssetDatabase.LoadAssetAtPath<GameObject>($@"{folderName}Obj/{part.ModelName}.prefab");
+                    if (src != null)
+                    {
+                        obj = (GameObject)PrefabUtility.InstantiatePrefab((GameObject)src);
+                        obj.name = part.Name;
+                    }
+                    else
+                    {
+                        obj = new GameObject(part.Name);
+                    }
                 }
                 InitializeDS1Part<MSB1DummyEnemyPart>(obj, part, 11, DummyEnemies);
             }
@@ -2244,7 +2430,7 @@ public class DarkSoulsTools : EditorWindow
             foreach (var part in msb.Parts.Collisions)
             {
                 string lowHigh = LoadHighResCol ? "h" : "l";
-                GameObject src = AssetDatabase.LoadAssetAtPath<GameObject>($@"Assets/DS1/{mapnameAdj}/{lowHigh}{part.ModelName.Substring(1)}.prefab");
+                GameObject src = AssetDatabase.LoadAssetAtPath<GameObject>($@"{folderName}{mapnameAdj}/{lowHigh}{part.ModelName.Substring(1)}.prefab");
                 GameObject obj = null;
                 if (src != null)
                 {
